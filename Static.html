@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureVote AI</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        /* --- CSS THEME & ANIMATIONS --- */
+        :root {
+            --bg-color: #050a14;
+            --primary: #00f3ff;
+            --secondary: #bc13fe;
+            --accent: #2dceef;
+            --text: #e0e6ed;
+            --glass: rgba(10, 18, 32, 0.85);
+            --border: rgba(0, 243, 255, 0.2);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; transition: all 0.3s ease; }
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--bg-color);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Animated Background Grid */
+        .bg-grid {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 243, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 243, 255, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: -1;
+        }
+
+        .container {
+            width: 100%; max-width: 450px;
+            padding: 20px;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Card Styling */
+        .card {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px 30px;
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.1);
+            backdrop-filter: blur(10px);
+            display: none; /* Controlled by JS */
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .card.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            text-align: center;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(0, 243, 255, 0.5);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: rgba(255,255,255,0.6);
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        /* Inputs */
+        .input-group { margin-bottom: 20px; position: relative; }
+        
+        input {
+            width: 100%;
+            padding: 15px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.9rem;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.15);
+        }
+
+        /* Buttons */
+        .btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 243, 255, 0.4);
+        }
+
+        .btn.secondary {
+            background: rgba(255,255,255,0.05);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn.secondary:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--primary);
+        }
+
+        /* Camera Area */
+        .camera-container {
+            position: relative;
+            width: 100%;
+            border-radius: 15px;
+            overflow: hidden;
+            background: #000;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+            transform: scaleX(-1); /* Mirror */
+        }
+
+        /* Biometric Scan Overlay */
+        .scan-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        .scan-line {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 3px;
+            background: var(--primary);
+            box-shadow: 0 0 15px var(--primary);
+            animation: scan 2s linear infinite;
+            opacity: 0.8;
+        }
+
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .face-circle {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 220px; height: 220px;
+            border: 2px dashed rgba(255,255,255,0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* Vignette effect */
+        }
+
+        /* Status Messages */
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.85rem;
+            text-align: center;
+            font-family: 'Roboto Mono', monospace;
+            opacity: 0;
+            animation: fadeIn 0.3s forwards;
+        }
+        .error { color: #ff4d4d; background: rgba(255, 77, 77, 0.1); border: 1px solid rgba(255, 77, 77, 0.3); }
+        .success { color: #00ff88; background: rgba(0, 255, 136, 0.1); border: 1px solid rgba(0, 255, 136, 0.3); }
+        .info { color: var(--primary); background: rgba(0, 243, 255, 0.1); border: 1px solid rgba(0, 243, 255, 0.3); }
+
+        /* Voting Cards */
+        .vote-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .vote-card {
+            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+        }
+        .vote-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .vote-card h3 { margin-top: 10px; font-size: 1.2rem; }
+        .icon { font-size: 2rem; color: var(--primary); }
+
+    </style>
+</head>
+<body>
+    <div class="bg-grid"></div>
+
+    <div class="container">
+        <!-- HOME VIEW -->
+        <div id="home" class="card active">
+            <h1>SecureVote</h1>
+            <p class="subtitle">Biometric Authentication System</p>
+            
+            <div style="margin-top: 40px;">
+                <button class="btn" onclick="navigate('register')">New Voter Registration</button>
+                <button class="btn secondary" onclick="navigate('login')">Voter Login</button>
+            </div>
+            
+            <p style="text-align: center; margin-top: 30px; font-size: 0.8rem; opacity: 0.5;">
+                Secured by AI Face Recognition
+            </p>
+        </div>
+
+        <!-- REGISTER VIEW -->
+        <div id="register" class="card">
+            <h1>Register</h1>
+            <p class="subtitle">Secure Enrollment</p>
+
+            <div class="input-group">
+                <input type="text" id="reg_name" placeholder="Full Name" />
+            </div>
+            <div class="input-group">
+                <input type="text" id="reg_aadhaar" placeholder="Aadhaar / Voter ID" />
+            </div>
+
+            <div class="camera-container">
+                <video id="reg_video" autoplay playsinline muted></video>
+                <div class="scan-overlay">
+                    <div class="face-circle"></div>
+                </div>
+            </div>
+
+            <button class="btn secondary" onclick="startCamera('reg_video')">1. Enable Camera</button>
+            <button class="btn" onclick="registerUser()">2. Scan & Register</button>
+
+            <div id="reg_status"></div>
+            <p style="margin-top: 20px; text-align: center; font-size: 0.8rem; opacity: 0.5;">
+                Already registered? <span style="color:var(--primary); cursor:pointer" onclick="navigate('login')">Login Here</span>
+            </p>
+        </div>
+
+        <!-- LOGIN VIEW -->
+        <div id="login" class="card">
+            <h1>Login</h1>
+            <p class="subtitle">Biometric Verification</p>
+
+            <div class="camera-container">
+                <video id="login_video" autoplay playsinline muted></video>
+                <div class="scan-overlay">
+                    <div class="scan-line"></div>
+                    <div class="face-circle"></div>
+                </div>
+            </div>
+
+            <button class="btn secondary" onclick="startCamera('login_video')">Enable Camera</button>
+            <button class="btn" onclick="loginUser()">Scan Face to Enter</button>
+
+            <div id="login_status"></div>
+            <p style="margin-top: 20px; text-align: center; font-size: 0.8rem; opacity: 0.5;">
+                New voter? <span style="color:var(--primary); cursor:pointer" onclick="navigate('register')">Register Here</span>
+            </p>
+        </div>
+
+        <!-- VOTING VIEW -->
+        <div id="dashboard" class="card">
+            <h1>Dashboard</h1>
+            <p class="subtitle">Welcome, <span id="dash_name">Voter</span></p>
+            
+            <p style="text-align: center; margin-top: 20px; color: var(--primary);">
+                ✓ Identity Verified
+            </p>
+
+            <p style="margin-top: 30px; margin-bottom: 10px; opacity: 0.7; text-align: center;">Select Your Candidate:</p>
+
+            <div class="vote-grid">
+                <div class="vote-card" onclick="castVote('Party Alpha')">
+                    <div class="icon">🟢</div>
+                    <h3>Party Alpha</h3>
+                </div>
+                <div class="vote-card" onclick="castVote('Party Beta')">
+                    <div class="icon">🔵</div>
+                    <h3>Party Beta</h3>
+                </div>
+            </div>
+
+            <button class="btn secondary" style="margin-top: 20px;" onclick="logout()">Logout</button>
+        </div>
+
+        <!-- RESULT VIEW -->
+        <div id="result" class="card">
+            <h1>Success</h1>
+            <p class="subtitle">Vote Recorded</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <div style="font-size: 4rem; color: var(--primary);">✓</div>
+                <p style="margin-top: 20px;">Your vote has been encrypted and stored securely.</p>
+            </div>
+
+            <button class="btn" onclick="logout()">Finish</button>
+        </div>
+    </div>
+
+    <script>
+        // --- LOGIC ---
+        const API = window.location.origin; // Automatically finds the server
+        let token = localStorage.getItem('token');
+
+        // Navigation
+        function navigate(id) {
+            document.querySelectorAll('.card').forEach(el => el.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        // Camera
+        function startCamera(id) {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } })
+            .then(stream => {
+                document.getElementById(id).srcObject = stream;
+                showStatus(id.replace('video', 'status'), 'Camera Active', 'success');
+            })
+            .catch(err => {
+                console.error(err);
+                showStatus(id.replace('video', 'status'), 'Camera Permission Denied', 'error');
+            });
+        }
+
+        // Status Helper
+        function showStatus(id, msg, type) {
+            const el = document.getElementById(id);
+            if(el) {
+                el.className = `status ${type}`;
+                el.textContent = msg;
+            }
+        }
+
+        // Register Logic
+        async function registerUser() {
+            const name = document.getElementById('reg_name').value;
+            const aadhaar = document.getElementById('reg_aadhaar').value;
+            const video = document.getElementById('reg_video');
+
+            if(!name || !aadhaar) { showStatus('reg_status', 'Fill all fields', 'error'); return; }
+            if(!video.srcObject) { showStatus('reg_status', 'Camera not started', 'error'); return; }
+
+            showStatus('reg_status', 'Processing Biometrics...', 'info');
+
+            // Capture Frame
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('name', name);
+                formData.append('aadhaar_id', aadhaar);
+                formData.append('file', blob, 'reg.jpg');
+
+                try {
+                    const res = await fetch(`${API}/api/register`, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    if(res.ok) {
+                        showStatus('reg_status', 'Registration Successful!', 'success');
+                        setTimeout(() => navigate('login'), 1500);
+                    } else {
+                        showStatus('reg_status', data.detail || 'Error', 'error');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showStatus('reg_status', 'Network Error. Is server running?', 'error');
+                }
+            }, 'image/jpeg');
+        }
+
+        // Login Logic
+        async function loginUser() {
+            const video = document.getElementById('login_video');
+            if(!video.srcObject) { showStatus('login_status', 'Camera not started', 'error'); return; }
+
+            showStatus('login_status', 'Scanning Face...', 'info');
+
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('file', blob, 'login.jpg');
+
+                try {
+                    const res = await fetch(`${API}/api/login`, { method: 'POST', body: formData });
+                    const data = await res.json();
+                    
+                    if(res.ok) {
+                        token = data.token;
+                        localStorage.setItem('token', token);
+                        checkStatus();
+                    } else {
+                        showStatus('login_status', data.detail || 'Unknown Error', 'error');
+                    }
+                } catch (e) {
+                    console.error(e);
+                    showStatus('login_status', 'Network Error', 'error');
+                }
+            }, 'image/jpeg');
+        }
+
+        // Check Status
+        async function checkStatus() {
+            if(!token) return;
+            try {
+                const res = await fetch(`${API}/api/status`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    document.getElementById('dash_name').innerText = data.name;
+                    if(data.has_voted) navigate('result');
+                    else navigate('dashboard');
+                } else {
+                    localStorage.removeItem('token');
+                    navigate('home');
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        // Vote Logic
+        async function castVote(candidate) {
+            if(!confirm(`Confirm vote for ${candidate}?`)) return;
+            
+            try {
+                const res = await fetch(`${API}/api/vote`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ candidate })
+                });
+                const data = await res.json();
+                if(res.ok) navigate('result');
+                else alert(data.detail);
+            } catch(e) { alert('Error casting vote'); }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            token = null;
+            navigate('home');
+        }
+
+        // Init
+        if(token) checkStatus();
+    </script>
+</body>
+</html>
